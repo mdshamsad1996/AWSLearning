@@ -1,0 +1,87 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Parameters:
+    InstanceTypeparameter:
+        Type: String
+        Default: t2.micro
+        AllowedValues: [t2.micro, m1.small, m1.large]
+        
+    ImageId:
+        Type: String
+        Default: ami-00dc79254d0461090
+    MySubnetId:
+        Type: String
+        Default: subnet-d52b1389
+        
+    myvpc:
+        Type: String
+        Default: vpc-31d0984b
+    
+        
+     
+# Resources
+      
+Resources:
+    # 1st Resource is MyEC2Instance EC2 Instance 
+    MyEC2Instance:
+        Type: AWS::EC2::Instance
+        Properties: 
+            ImageId: ami-00dc79254d0461090
+            InstanceType: !Ref InstanceTypeparameter
+            SecurityGroupIds: [!Ref MyInstanceSecurityGroup]
+            SubnetId: !Ref MySubnetId
+            IamInstanceProfile: !Ref MyInstanceProfile
+            
+            
+    # MyInstance profile for IamInstanceProfile
+    
+    MyInstanceProfile:
+        Type: AWS::IAM::InstanceProfile
+        Properties:
+            InstanceProfileName: MyProfile
+            Path: /
+            Roles: [!Ref MyRootRole]
+     
+    
+    # MyRootRole for Roles
+    
+    MyRootRole:
+      Type: AWS::IAM::Role
+      Properties:
+        AssumeRolePolicyDocument:
+          Version: 2012-10-17
+          Statement:
+           - 
+             Effect: Allow
+             Principal:
+               Service: ["ec2.amazonaws.com"]
+             Action: ['sts:AssumeRole']
+        Path: /
+        Policies:
+          - 
+            PolicyName: root
+            PolicyDocument:
+              Version: 2012-10-17
+              Statement:
+              -
+                Effect: Allow
+                Action: 's3:*'
+                Resource: '*'
+                
+    # MyInstanceSecurityGroup for  SecurityGroups
+    MyInstanceSecurityGroup:
+      Type: AWS::EC2::SecurityGroup
+      Properties:
+          GroupDescription: Allow http to client host
+          VpcId: !Ref myvpc
+          SecurityGroupIngress:
+            - 
+              IpProtocol: tcp
+              FromPort: 80
+              ToPort: 80
+              CidrIp: 0.0.0.0/0
+          SecurityGroupEgress:
+            - 
+              IpProtocol: tcp
+              FromPort: 80
+              ToPort: 80
+              CidrIp: 0.0.0.0/0
