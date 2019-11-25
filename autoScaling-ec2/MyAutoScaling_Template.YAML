@@ -1,0 +1,197 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Parameters:
+  MyAutoScalingGroupName:
+    Type: String
+    Default: MyAutoScalingGroup
+    
+  MyLaunchConfigName:
+    Type: String
+    Default: MyConfigForASG  
+  ImageId:
+    Type: String
+    Default: ami-00dc79254d0461090
+   
+  MyInstanceType:
+    Type: String
+    AllowedValues: [t2.micro, m1.small, m1.large]
+    Default: t2.micro
+      
+  myvpc:
+    Type: String
+    Default: vpc-31d0984b
+  minSize:
+    Type: String
+    Default: 1
+        
+  maxSize:
+    Type: String
+    Default: 2
+  
+#Resources
+Resources:
+  MyASG:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    DependsOn: MyLaunchConfig
+    Properties:
+      AutoScalingGroupName:  !Ref MyAutoScalingGroupName
+      LaunchConfigurationName: !Ref MyLaunchConfig
+      AvailabilityZones: [us-east-1a,us-east-1b,us-east-1c,us-east-1d]
+      MinSize: !Ref minSize
+      MaxSize: !Ref maxSize
+  
+  #CPUAlarmHigh
+  CPUAlarmHigh:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      EvaluationPeriods: 1
+      Statistic: Average
+      Threshold: 20
+      AlarmDescription: Alarm if CPU too high or metric disappears indicating instance
+        is down
+      Period: 60
+      AlarmActions: [!Ref MyASGScalingUPPolicy]
+      Namespace: AWS/EC2
+      Dimensions:
+        -
+          Name: AutoScalingGroupName
+          Value: !Ref MyASG
+      ComparisonOperator: GreaterThanThreshold
+      MetricName: CPUUtilization
+      
+  #CPUAlarmLow
+  CPUAlarmLow:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      EvaluationPeriods: 1
+      Statistic: Average
+      Threshold: 20
+      AlarmDescription: Alarm if CPUUtilization  is less than 20 for 40 sec
+      Period: 60
+      AlarmActions: [!Ref MyASGScalingDownPolicy]
+      Namespace: AWS/EC2
+      Dimensions:
+        -
+          Name: AutoScalingGroupName
+          Value: !Ref MyASG
+      ComparisonOperator: LessThanThreshold
+      MetricName: CPUUtilization
+   
+      
+      
+  # MyLaunchconfig name
+  MyLaunchConfig:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    DependsOn: MyInstanceProfile
+    Properties:
+      AssociatePublicIpAddress: true
+      LaunchConfigurationName: !Ref MyLaunchConfigName
+      KeyName: sham_Key_Pair
+      IamInstanceProfile: !Ref MyInstanceProfile
+      ImageId: !Ref ImageId
+      InstanceType: !Ref MyInstanceType
+      SecurityGroups: [!Ref MyInstanceSecurityGroup]
+  
+  
+  #Auto scaling Up policy
+  
+  MyASGScalingUPPolicy: 
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties: 
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref MyASG
+      PolicyType: StepScaling
+      MetricAggregationType: Average
+      EstimatedInstanceWarmup: 20
+      StepAdjustments: 
+        - 
+          MetricIntervalLowerBound: 0
+          ScalingAdjustment: 1
+          
+  # Auto Scaling Down Policy        
+  MyASGScalingDownPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties: 
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref MyASG
+      PolicyType: StepScaling
+      MetricAggregationType: Average
+      EstimatedInstanceWarmup: 20
+      StepAdjustments: 
+        - 
+          MetricIntervalUpperBound: -1
+          ScalingAdjustment: -1
+  
+   
+  #MyInstanceProfile 
+  MyInstanceProfile:
+     Type: AWS::IAM::InstanceProfile
+     DependsOn: S3AdminRole
+     Properties:
+       Path: /
+       Roles: [!Ref S3AdminRole]
+    
+ 
+  # IAM  Role for S3 full Access
+  S3AdminRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - 
+            Effect: Allow
+            Principal:
+                Service: ["ec2.amazonaws.com"]
+            Action: ['sts:AssumeRole']
+      Path: /
+      Policies:
+        - 
+          PolicyName: S3AdminPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              -
+                Effect: Allow
+                Action: 's3:*'
+                Resource: '*' 
+ 
+  # MyInstanceSecurityGroup or  SecurityGroups
+  MyInstanceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow http to client host
+      VpcId: !Ref myvpc
+      SecurityGroupIngress:
+        - 
+          IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        -
+          IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+        -
+          IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+       
+        
+      SecurityGroupEgress:
+        -  
+          IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        -
+          IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+        -
+          IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
