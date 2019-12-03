@@ -1,0 +1,200 @@
+####################################################################################################################################################################
+
+
+                                                        #AutoScaling
+                                                        
+ ####################################################################################################################################################################
+AWSTemplateFormatVersion: '2010-09-09'
+Parameters:
+  MyAutoScalingGroupName:
+    Type: String
+    Default: MyAutoScalingGroup
+
+  MyLaunchConfigName:
+    Type: String
+    Default: MyConfigForASG 
+  
+  subnets:
+    Type: List<String>
+    Default: subnet-0eb1b0671f2ff47f6, subnet-05b9074aafa3f65f9
+  
+  minSize:
+    Type: String
+    Default: 2
+        
+  maxSize:
+    Type: String
+    Default: 4
+  
+  ImageId:
+    Type: String
+    Default: ami-00dc79254d0461090
+    
+  MyInstanceType:
+    Type: String
+    AllowedValues: [t2.micro, m1.small, m1.large]
+    Default: t2.micro
+  vpc:
+    Type: String
+    Default: vpc-0734738edb98303ad
+
+
+Resources:
+  MyASG:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    DependsOn: MyLaunchConfig
+    Properties:
+      AutoScalingGroupName:  !Ref MyAutoScalingGroupName
+      LaunchConfigurationName: !Ref MyLaunchConfig
+      VPCZoneIdentifier: !Ref subnets
+      MinSize: !Ref minSize
+      MaxSize: !Ref maxSize
+      TargetGroupARNs:
+        -
+          Fn::ImportValue: TargetGroupARNForAutoScaling   
+      HealthCheckGracePeriod: 300
+      
+  #CPUAlarmHigh
+  CPUAlarmHigh:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      EvaluationPeriods: 1
+      Statistic: Average
+      Threshold: 20
+      AlarmDescription: Alarm if CPU too high or metric disappears indicating instance
+        is down
+      Period: 60
+      AlarmActions: [!Ref MyASGScalingUPPolicy]
+      Namespace: AWS/EC2
+      Dimensions:
+        -
+          Name: AutoScalingGroupName
+          Value: !Ref MyASG
+      ComparisonOperator: GreaterThanThreshold
+      MetricName: CPUUtilization
+
+
+    #CPUAlarmLow
+  CPUAlarmLow:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      EvaluationPeriods: 1
+      Statistic: Average
+      Threshold: 20
+      AlarmDescription: Alarm if CPUUtilization  is less than 20 for 40 sec
+      Period: 60
+      AlarmActions: [!Ref MyASGScalingDownPolicy]
+      Namespace: AWS/EC2
+      Dimensions:
+        -
+          Name: AutoScalingGroupName
+          Value: !Ref MyASG
+      ComparisonOperator: LessThanThreshold
+      MetricName: CPUUtilization
+
+       
+  # MyLaunchconfig name
+  MyLaunchConfig:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    DependsOn: MyInstanceProfile
+    Properties:
+      AssociatePublicIpAddress: true
+      LaunchConfigurationName: !Ref MyLaunchConfigName
+      KeyName: sham_Key_Pair
+      IamInstanceProfile: !Ref MyInstanceProfile
+      ImageId: !Ref ImageId
+      InstanceType: !Ref MyInstanceType
+      SecurityGroups: [!Ref MyInstanceSecurityGroup]
+      UserData:
+             Fn::Base64: !Sub |
+               #!/bin/bash
+               sudo su
+               yum update -y
+               yum install httpd -y
+               service httpd start
+               chkconfig httpd on
+               cd /var/www/html
+               echo "<html><h1>Welcome to the EC2 Fleet!</h1></html>" > index.html
+   
+  #Auto scaling Up policy
+  
+  MyASGScalingUPPolicy: 
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties: 
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref MyASG
+      PolicyType: StepScaling
+      MetricAggregationType: Average
+      EstimatedInstanceWarmup: 20
+      StepAdjustments: 
+        - 
+          MetricIntervalLowerBound: 0
+          ScalingAdjustment: 1
+          
+  # Auto Scaling Down Policy        
+  MyASGScalingDownPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties: 
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref MyASG
+      PolicyType: StepScaling
+      MetricAggregationType: Average
+      EstimatedInstanceWarmup: 20
+      StepAdjustments: 
+        - 
+          MetricIntervalUpperBound: -1
+          ScalingAdjustment: -1
+  
+   
+  #MyInstanceProfile 
+  MyInstanceProfile:
+     Type: AWS::IAM::InstanceProfile
+     DependsOn: S3AdminRole
+     Properties:
+       Path: /
+       Roles: [!Ref S3AdminRole]
+    
+ 
+  # IAM  Role for S3 full Access
+  S3AdminRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - 
+            Effect: Allow
+            Principal:
+                Service: ["ec2.amazonaws.com"]
+            Action: ['sts:AssumeRole']
+      Path: /
+      Policies:
+        - 
+          PolicyName: S3AdminPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              -
+                Effect: Allow
+                Action: 's3:*'
+                Resource: '*' 
+ 
+  # MyInstanceSecurityGroup or  SecurityGroups
+  MyInstanceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow http to client host
+      VpcId: !Ref vpc
+      SecurityGroupIngress:
+        -
+          IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+        -
+          IpProtocol: tcp
+          FromPort: 0
+          ToPort: 65535
+          CidrIp: 10.0.0.0/26
+      
+    
