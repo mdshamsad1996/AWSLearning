@@ -1,0 +1,15 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Resources:
+  ScheduledRule: 
+    Type: AWS::Events::Rule
+    Properties: 
+      Description: "ScheduledRule"
+      Name: "StopEc2Rule"
+      ScheduleExpression: cron(20 17 ? * MON-FRI *)
+      State: "ENABLED"
+      Targets: 
+        -
+          Arn: !Sub 
+            - arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${lambdaFunctionName}
+            - lambdaFunctionName: !ImportValue AWSLambdaHandlerARNForCloudWatchRules
+          Id: "StopEc2InstancesRule"

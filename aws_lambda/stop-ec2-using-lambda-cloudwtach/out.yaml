@@ -1,0 +1,38 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Resources:
+  AWSLambdaHandler:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: stop-ec2-instancae
+      Handler: src/lambda_handler.lambda_handler
+      Runtime: python3.7
+      Policies:
+      - AWSLambdaExecute
+      - Statement:
+        - Action:
+          - logs:CreateLogGroup
+          - logs:CreateLogStream
+          - logs:PutLogEvents
+          Effect: Allow
+          Resource: arn:aws:logs:*:*:*
+        - Action:
+          - ec2:DescribeInstances
+          - ec2:DescribeRegions
+          - ec2:StartInstances
+          - ec2:StopInstances
+          Effect: Allow
+          Resource: '*'
+        - Action:
+          - s3:GetObject
+          - s3:GetObjectACL
+          Effect: Allow
+          Resource: arn:aws:s3:::my-bucket/*
+        Version: '2012-10-17'
+      CodeUri: s3://my-bucket-1996/1e6e3e1ae985ff873b284e1e9c66a10a
+Outputs:
+  StackForLoadBalancer:
+    Value:
+      Ref: AWSLambdaHandler
+    Export:
+      Name: AWSLambdaHandlerARNForCloudWatchRules
