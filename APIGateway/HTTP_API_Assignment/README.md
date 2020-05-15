@@ -68,7 +68,7 @@ Setting up AWS Credentials using below command
 
 #### Reference: I have taken help from below link
 
-    https://auth0.com/blog/securing-aws-http-apis-with-jwt-authorizers/#Add-a-JWT-Authorizer-to-Your-API
+ https://auth0.com/blog/securing-aws-http-apis-with-jwt-authorizers/#Add-a-JWT-Authorizer-to-Your-API
 
         
     
