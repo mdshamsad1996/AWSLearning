@@ -1,0 +1,38 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: AWS SAM template with a simple API definition
+
+Parameters:
+  StageName:
+    Type: String
+    Default: Prod
+
+Resources:
+  HttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      StageName: !Ref StageName
+      Auth:
+        Authorizers:
+           OAuth2Authorizer:
+             JwtConfiguration:
+              issuer: https://dev-s8k2i29i.auth0.com/
+              audience:
+                -  https://auth0-jwt-authorizer
+
+             IdentitySource: $request.header.Authorization     
+        DefaultAuthorizer: OAuth2Authorizer  
+
+  ApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Events:
+        ApiEvent:
+          Type: HttpApi
+          Properties:
+            Path: /hello
+            Method: get
+            ApiId: !Ref HttpApi
+
+      Runtime: python3.7
+      Handler: src/hello_world.handler
